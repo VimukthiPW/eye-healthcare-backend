@@ -1,42 +1,13 @@
 const express = require('express');
-const nodemailer = require('nodemailer');
+const axios = require('axios');
 
 const router = express.Router();
 
 // =================================================
-// Gmail Transporter
+// Brevo API
 // =================================================
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-
-  // Force IPv4 connection
-  family: 4,
-
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-
-  // Connection timeout settings
-  connectionTimeout: 15000,
-  greetingTimeout: 15000,
-  socketTimeout: 20000,
-});
-
-// =================================================
-// Verify Gmail Connection
-// =================================================
-
-transporter.verify((error, success) => {
-  if (error) {
-    console.error('❌ Gmail transporter error:', error);
-  } else {
-    console.log('✅ Gmail transporter is ready');
-  }
-});
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 
 // =================================================
@@ -59,7 +30,7 @@ router.post('/send', async (req, res) => {
 
 
     // -------------------------------------------------
-    // Validate email
+    // Validate recipient email
     // -------------------------------------------------
 
     if (!email) {
@@ -67,6 +38,38 @@ router.post('/send', async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Recipient email is required',
+      });
+
+    }
+
+
+    // -------------------------------------------------
+    // Check Brevo API Key
+    // -------------------------------------------------
+
+    if (!process.env.BREVO_API_KEY) {
+
+      console.error('❌ BREVO_API_KEY is not configured');
+
+      return res.status(500).json({
+        success: false,
+        message: 'Brevo API key is not configured',
+      });
+
+    }
+
+
+    // -------------------------------------------------
+    // Check Sender Email
+    // -------------------------------------------------
+
+    if (!process.env.EMAIL_USER) {
+
+      console.error('❌ EMAIL_USER is not configured');
+
+      return res.status(500).json({
+        success: false,
+        message: 'Sender email is not configured',
       });
 
     }
@@ -199,30 +202,54 @@ router.post('/send', async (req, res) => {
 
 
     // =================================================
-    // Send Email
+    // Send Email through Brevo HTTPS API
     // =================================================
 
-    console.log('📧 Sending medical report to:', email);
+    console.log('📧 Sending medical report through Brevo...');
+    console.log('📨 Recipient:', email);
 
-    await transporter.sendMail({
 
-      from: `"Eye Healthcare System" <${process.env.EMAIL_USER}>`,
+    const response = await axios.post(
+      BREVO_API_URL,
 
-      to: email,
+      {
+        sender: {
+          name: 'Eye Healthcare System',
+          email: process.env.EMAIL_USER,
+        },
 
-      subject: 'Eye Health Screening Report',
+        to: [
+          {
+            email: email,
+            name: patientName || 'Patient',
+          },
+        ],
 
-      html: emailHTML,
+        subject: 'Eye Health Screening Report',
 
-    });
+        htmlContent: emailHTML,
+      },
 
+      {
+        headers: {
+          accept: 'application/json',
+          'api-key': process.env.BREVO_API_KEY,
+          'content-type': 'application/json',
+        },
+
+        timeout: 30000,
+      }
+    );
+
+
+    // =================================================
+    // Success
+    // =================================================
 
     console.log('✅ Medical report email sent successfully');
 
+    console.log('📨 Brevo message ID:', response.data?.messageId);
 
-    // =================================================
-    // Success Response
-    // =================================================
 
     return res.status(200).json({
 
@@ -230,21 +257,52 @@ router.post('/send', async (req, res) => {
 
       message: 'Medical report sent successfully',
 
+      messageId: response.data?.messageId,
+
     });
 
 
   } catch (error) {
 
-    console.error('❌ Email sending error:', error);
+    console.error('❌ Brevo email sending error');
 
 
-    return res.status(500).json({
+    if (error.response) {
+
+      console.error(
+        'Brevo status:',
+        error.response.status
+      );
+
+      console.error(
+        'Brevo response:',
+        error.response.data
+      );
+
+    } else {
+
+      console.error(
+        'Error:',
+        error.message
+      );
+
+    }
+
+
+    return res.status(
+      error.response?.status >= 400 &&
+      error.response?.status < 500
+        ? error.response.status
+        : 500
+    ).json({
 
       success: false,
 
       message: 'Failed to send medical report',
 
-      error: error.message,
+      error:
+        error.response?.data ||
+        error.message,
 
     });
 
