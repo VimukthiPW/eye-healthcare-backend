@@ -12,11 +12,15 @@ const transporter = nodemailer.createTransport({
   port: 587,
   secure: false,
 
+  // Force IPv4 connection
+  family: 4,
+
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
 
+  // Connection timeout settings
   connectionTimeout: 15000,
   greetingTimeout: 15000,
   socketTimeout: 20000,
@@ -217,7 +221,7 @@ router.post('/send', async (req, res) => {
 
 
     // =================================================
-    // Success
+    // Success Response
     // =================================================
 
     return res.status(200).json({
