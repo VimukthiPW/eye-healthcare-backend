@@ -16,6 +16,18 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// =================================================
+// Verify Gmail Connection
+// =================================================
+
+transporter.verify((error, success) => {
+  if (error) {
+    console.error('❌ Gmail transporter error:', error);
+  } else {
+    console.log('✅ Gmail transporter is ready');
+  }
+});
+
 
 // =================================================
 // Send Medical Report
@@ -180,6 +192,8 @@ router.post('/send', async (req, res) => {
     // Send Email
     // =================================================
 
+    console.log('📧 Sending medical report to:', email);
+
     await transporter.sendMail({
 
       from: `"Eye Healthcare System" <${process.env.EMAIL_USER}>`,
@@ -191,6 +205,9 @@ router.post('/send', async (req, res) => {
       html: emailHTML,
 
     });
+
+
+    console.log('✅ Medical report email sent successfully');
 
 
     // =================================================
@@ -208,10 +225,7 @@ router.post('/send', async (req, res) => {
 
   } catch (error) {
 
-    console.error(
-      'Email sending error:',
-      error
-    );
+    console.error('❌ Email sending error:', error);
 
 
     return res.status(500).json({
